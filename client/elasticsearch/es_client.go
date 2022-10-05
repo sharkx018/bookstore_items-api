@@ -2,9 +2,9 @@ package elasticsearch
 
 import (
 	"fmt"
+	//"fmt"
 	"github.com/olivere/elastic"
-	"github.com/sharkx018/bookstore_items-api/logger"
-	logger2 "github.com/sharkx018/bookstore_utils-go/logger"
+	"github.com/sharkx018/bookstore_utils-go/logger"
 	"golang.org/x/net/context"
 	_ "log"
 	_ "os"
@@ -21,12 +21,14 @@ type esClient struct {
 
 type esClientInterface interface {
 	setClient(*elastic.Client)
-	Index(string, interface{}) (*elastic.IndexResponse, error)
+	Index(string, string, interface{}) (*elastic.IndexResponse, error)
+	Get(index string, docType string, id string) (*elastic.GetResult, error)
+	Search(index string, query elastic.Query) (*elastic.SearchResult, error)
 }
 
 func Init() {
 
-	log := logger2.GetLogger()
+	log := logger.GetLogger()
 	client, err := elastic.NewClient(
 		elastic.SetURL("http://127.0.0.1:9200"),
 		elastic.SetHealthcheckInterval(10*time.Second),
@@ -46,14 +48,41 @@ func (c *esClient) setClient(client *elastic.Client) {
 	c.client = client
 }
 
-func (c *esClient) Index(index string, doc interface{}) (*elastic.IndexResponse, error) {
+func (c *esClient) Index(index string, docType string, doc interface{}) (*elastic.IndexResponse, error) {
 	ctx := context.Background()
-	result, err := c.client.Index().Index(index).BodyJson(doc).Do(ctx)
+	result, err := c.client.Index().Index(index).Type(docType).BodyJson(doc).Do(ctx)
 
 	if err != nil {
 		logger.Error(fmt.Sprintf("error when trying to index document in index, %s", index), err)
 		return nil, err
 	}
 
+	return result, nil
+}
+
+func (c *esClient) Get(index string, docType string, id string) (*elastic.GetResult, error) {
+	ctx := context.Background()
+	result, err := c.client.Get().
+		Index(index).
+		Type(docType).
+		Id(id).
+		Do(ctx)
+
+	if err != nil {
+		logger.Error(fmt.Sprintf("error when trying to get id %s", id), err)
+		return nil, err
+	}
+
+	return result, nil
+
+}
+
+func (c *esClient) Search(index string, query elastic.Query) (*elastic.SearchResult, error) {
+	ctx := context.Background()
+	result, err := c.client.Search(index).Query(query).RestTotalHitsAsInt(true).Do(ctx)
+	if err != nil {
+		logger.Error(fmt.Sprintf("error when trying to search documents in index %s", query), err)
+		return nil, err
+	}
 	return result, nil
 }
